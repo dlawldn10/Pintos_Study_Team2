@@ -455,7 +455,7 @@ thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
 	enum intr_level old_level;
 	old_level = intr_disable();
-	int load_avg_100 = fp_to_int(mult_mixed(load_avg,100));
+	int load_avg_100 = fp_to_int_round(mult_mixed(load_avg,100));
 	intr_set_level(old_level);
 	return load_avg_100;
 }
@@ -807,7 +807,7 @@ void mlfqs_increment(void){
 	if(current == idle_thread){
 		return;
 	}
-	current->recent_cpu = current->recent_cpu + 1;
+	current->recent_cpu = add_mixed(current->recent_cpu,1);
 }
 
 void mlfqs_recalc(void){
