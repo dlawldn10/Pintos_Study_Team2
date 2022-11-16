@@ -173,6 +173,7 @@ void mlfqs_recent_cpu(struct thread *t);
 void mlfqs_load_avg(void);
 void mlfqs_increment(void);
 void mlfqs_recalc(void);
+void mlfqs_ticks_cpu(void);
 
 #endif 
 /* threads/thread.h */
