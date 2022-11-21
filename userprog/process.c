@@ -17,6 +17,7 @@
 #include "threads/thread.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -29,9 +30,11 @@ static void __do_fork (void *);
 void argument_stack(char ** parse, int count, struct intr_frame* if_);
 
 /* General process initializer for initd and other process. */
+static struct lock locks;
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
+	// struct thread *current = next_thread_to_run();
 }
 
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
@@ -42,6 +45,7 @@ process_init (void) {
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
+	char **next_ptr;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
@@ -50,9 +54,10 @@ process_create_initd (const char *file_name) {
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
-
+	// strtok_r(fn_copy, " ", next_ptr);
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	printf("in process create initd tid %d, current tid %d\n", tid, thread_tid());
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -66,7 +71,7 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
-
+	printf("f_name %s\n", f_name);
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -184,12 +189,12 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
-
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
 
+	hex_dump(_if.rsp,_if.rsp,KERN_BASE - _if.rsp,true);
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -205,11 +210,13 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
-int
+
+
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while (1){}
 	return -1;
 }
 
@@ -221,7 +228,8 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	// lock_release(&locks);
+	printf("%s: exit(%d)\n", curr->name, curr->tid);
 	process_cleanup ();
 }
 
@@ -342,7 +350,16 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	printf("file_name in load %s\n", file_name);
+	char tmp[128];
+	char *next_ptr2[64];
+	// printf("check strlcpy\n");
+	strlcpy(tmp, file_name, strlen(file_name)+1);
+	// printf("check strtok tmp %s\n", tmp);
+	strtok_r(tmp, " ", next_ptr2);
+	// printf("temp %s\n", tmp);
+	file = filesys_open (tmp);
+
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -362,6 +379,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
+	// void hex_dump (uintptr_t ofs, const void *, size_t size, bool ascii);
+	
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
 
@@ -416,20 +435,19 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
-
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
+	printf("here in load rip %p rsp %p\n", if_->rip, if_->rsp);
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 	/* Arguments Parsing */
 	/* 인자들을 띄어쓰기 기준으로 토크화 및 토큰의 개수 계산 */
-	char *copy[128];
-	strlcpy(copy,file_name,strlen(file_name));
-	char* next_ptr,ret_ptr;
+	char copy[128];
+	strlcpy(copy,file_name,strlen(file_name)+1);
+	printf("filename %s\n",copy);
+	char* next_ptr, *ret_ptr;
 	char* argument_list[128];
 	int argument_count = 0;
-
 	ret_ptr = strtok_r(copy," ",&next_ptr);
 	argument_list[argument_count] = ret_ptr;
 	while (ret_ptr)
@@ -455,51 +473,38 @@ void argument_stack(char ** parse, int count, struct intr_frame* if_){
 	int algin_size = 0;
 	int i,j;
 
-	if_->rsp = USER_STACK;
 	/* 문자열 할당 */
 	for(i = count - 1; i > -1 ; i--){
 		algin_size = strlen(parse[i]) + 1;
-		if_->rsp = if_->rsp - algin_size;
+		if_->rsp = if_->rsp - algin_size; 
 		memcpy(if_->rsp, parse[i], algin_size);
 		pointer_address[i] = if_->rsp;
 	}
+
 	/* word-align 할당 */
-	int target = 0;
-	// if(algin_size % 8 != 0){
-	// 	target = (algin_size / 8) + 1;
-	// 	target = (target * 8) - algin_size;
-	// 	for(i = target; i > -1; i--){
-	// 		if_->rsp = if_->rsp - 1;
-	// 		memcpy(if_->rsp,0,target);
-	// 	}
-	// }
 	while ((if_->rsp % 8) != 0 ){
 		if_->rsp--;
+		*(uint8_t *)if_->rsp = 0;
 	}
+
 	/* char* argv[4] 할당 */
 	if_->rsp -= 8;
-	// memcpy(if_->rsp,0,8);
-	ASSERT(if_->rsp % 16 != 0);
-	*(char *)if_->rsp = '\0';
+	memset(if_->rsp,0,sizeof(char*));
+
 	/* argv[3] ~ [0] 할당*/
-	char* rsi_address;
 	for (size_t i = count - 1; i > -1; i--)
 	{
 		if_->rsp -= 8;
-		if_->rsp = pointer_address[i];
-		// memcpy(if_->rsp,pointer_address[i],8);
-		// if (i == 0){
-		// 	rsi_address = if_->rsp;
-		// }
+		memcpy(if_->rsp, &pointer_address[i], sizeof(char*));
 	}
-	/* 16의 배수를 확인? */
-	/* Fake return Adrress 할당 */
-	if_->R.rdi = count;
-	if_->R.rsi = if_->rsp;
-	if_->rsp -= 8;
-	memcpy(if_->rsp,0,8);
-	/* 제일 마지막 단계로 레지스터 설정 */
 
+	/* Fake return Adrress 할당 */
+	if_->rsp -= 8;
+	memset(if_->rsp,0,sizeof(void*));
+
+	/* Register 설정 */
+	if_->R.rdi = count;
+	if_->R.rsi = if_->rsp + 8;	
 }
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
