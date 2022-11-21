@@ -194,7 +194,7 @@ process_exec (void *f_name) {
 	if (!success)
 		return -1;
 
-	hex_dump(_if.rsp,_if.rsp,KERN_BASE - _if.rsp,true);
+	// hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -489,7 +489,7 @@ void argument_stack(char ** parse, int count, struct intr_frame* if_){
 
 	/* char* argv[4] 할당 */
 	if_->rsp -= 8;
-	memset(if_->rsp,0,sizeof(char*));
+	memset(if_->rsp, 0, sizeof(char*));
 
 	/* argv[3] ~ [0] 할당*/
 	for (size_t i = count - 1; i > -1; i--)
