@@ -7,10 +7,15 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 void check_address(void* addr);
+void halt(void);
+void exit(int status);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
 
 /* System call.
  *
@@ -42,13 +47,57 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+	uint64_t number = f->R.rax;
+	switch (number)
+	{
+	case SYS_HALT:
+		halt();
+		break;
+	case SYS_EXIT:
+		exit(f->R.rdi);
+	case SYS_CREATE:
+		create(f->R.rdi,f->R.rsi);
+	case SYS_REMOVE:
+		remove(f->R.rdi);
+	default:
+		break;
+	}
 	printf ("system call!\n");
 	thread_exit ();
 }
 
-/* Project2-2 User Memory Access*/
+/* Project2-2 User Memory Access */
 void check_address(void* addr){
 	if(!is_user_vaddr(addr)){
 		exit(-1);
 	}
+}
+
+/* Project2-2 User Memory Access */
+void halt(void){
+	power_off();
+}
+
+/* Project2-2 User Memory Access */
+void exit (int status){
+	/* status가 1로 넘어온 경우는 정상 종료 */
+	struct thread* curr = thread_current();
+	printf("Process Name : %s, Status : %d \n",curr->name, status);
+	thread_exit();
+}
+
+bool create(const char *file, unsigned initial_size){
+	check_address(file);
+	if(filesys_create(file,initial_size)){
+		return true;
+	}
+	return false;
+}
+
+bool remove(const char *file){
+	check_address(file);
+	if(filesys_remove(file)){
+		return true;
+	}
+	return false;
 }

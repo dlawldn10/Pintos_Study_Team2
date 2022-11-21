@@ -386,7 +386,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
-	// void hex_dump (uintptr_t ofs, const void *, size_t size, bool ascii);
 	
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
