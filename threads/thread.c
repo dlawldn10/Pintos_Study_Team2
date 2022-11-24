@@ -419,7 +419,7 @@ void test_max_priority(int new_priority){
 	int run_priority = thread_current()->priority;
 	struct list_elem *e= list_begin(&ready_list);
 	struct thread *t = list_entry(e, struct thread, elem);
-    
+    // test_max_priority 함수 assertion 방지 추가
 	if (run_priority < t->priority && !intr_context())
 	{
 		thread_yield();
